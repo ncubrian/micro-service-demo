@@ -56,7 +56,7 @@
       $ /opt/prometheus/prometheus -version
       $ cat > /opt/prometheus/test-etcd.yaml <<EOF
       global:
-      scrape_interval: 10s
+        scrape_interval: 10s
       scrape_configs:
       - job_name: test-etcd
         static_configs:

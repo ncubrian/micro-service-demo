@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,8 +30,8 @@ import (
 var (
 	port          = flag.Int("port", 9001, "transaction service listening port")
 	transServ     = flag.String("trans service", "trans", "transaction service name")
-	etcdReg       = flag.String("reg", "http://192.168.99.40:2379,http://192.168.99.50:2379,http://192.168.99.60:2379", "register etcd address")
-	endpoint      = flag.String("zipkin endpoint", "http://10.30.1.20:9411/api/v1/spans", "Endpoint to send Zipkin spans to")
+	etcdReg       = flag.String("reg", "http://192.168.99.11:2379,http://192.168.99.22:2379,http://192.168.99.33:2379", "register etcd address")
+	endpoint      = flag.String("zipkin endpoint", "http://192.168.99.10:9411/api/v1/spans", "Endpoint to send Zipkin spans to")
 	debug         = flag.Bool("debug mode", false, "zipkin debug mode")
 	sameSpan      = flag.Bool("same span", true, "same span can be set to true for RPC style spans (Zipkin V1) vs Node style (OpenTracing)")
 	traceID128Bit = flag.Bool("trace id 128 bit", true, "make Tracer generate 128 bit traceID's for root spans.")
@@ -164,13 +165,27 @@ func dbMockFind(ctx context.Context) (*pb.TransList, error) {
 }
 
 // localIP 本机 IP
+func localIPEx() (localIP string) {
+	conn, err := net.Dial("udp", "baidu.com:80")
+	if err != nil {
+		log.Error(err)
+		localIP = "127.0.0.1"
+	} else {
+		localIP = strings.Split(conn.LocalAddr().String(), ":")[0]
+		conn.Close()
+	}
+	log.Infof("local ip:\t %s\n", localIP)
+	return
+}
+
+// localIP 本机 IP
 func localIP() (localIP string) {
 	inter := "eth1"
 
 	ifi, err := net.InterfaceByName(inter)
 	if err != nil {
 		log.Error(err)
-		return
+		return localIPEx()
 	}
 	addrs, err := ifi.Addrs()
 	if err != nil {
