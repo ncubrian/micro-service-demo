@@ -4,11 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	// "sourcegraph.com/sourcegraph/appdash"
@@ -16,22 +13,22 @@ import (
 	"github.com/CardInfoLink/log"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 
-	pb "github.com/jackyvictory/micro-service-demo/service/pb"
+	pb "github.com/ncubrian/micro-service-demo/service/pb"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	// appdashot "sourcegraph.com/sourcegraph/appdash/opentracing"
-	grpclb "github.com/jackyvictory/micro-service-demo/facility/grpclb"
+	grpclb "github.com/ncubrian/micro-service-demo/facility/grpclb"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
 )
 
 var (
 	port          = flag.Int("port", 9001, "transaction service listening port")
 	transServ     = flag.String("trans service", "trans", "transaction service name")
-	etcdReg       = flag.String("reg", "http://192.168.99.11:2379,http://192.168.99.22:2379,http://192.168.99.33:2379", "register etcd address")
-	endpoint      = flag.String("zipkin endpoint", "http://192.168.99.10:9411/api/v1/spans", "Endpoint to send Zipkin spans to")
+	zkReg       = flag.String("reg", "192.168.1.213:2181,192.168.1.224:2181,192.168.1.226:2181", "register zookeeper address")
+	endpoint      = flag.String("zipkin endpoint", "http://192.168.99.203:9411/api/v1/spans", "Endpoint to send Zipkin spans to")
 	debug         = flag.Bool("debug mode", false, "zipkin debug mode")
 	sameSpan      = flag.Bool("same span", true, "same span can be set to true for RPC style spans (Zipkin V1) vs Node style (OpenTracing)")
 	traceID128Bit = flag.Bool("trace id 128 bit", true, "make Tracer generate 128 bit traceID's for root spans.")
@@ -81,19 +78,11 @@ func main() {
 	}
 
 	// Regist grpc load balancer
-	err = grpclb.Register(*transServ, localIP(), *port, *etcdReg, time.Second*10, 15)
+	err = grpclb.Register(*transServ, localIP(), *port, *zkReg, 3 * time.Second)
 	if err != nil {
 		log.Errorf("failed to register grpclb, error is %v", err)
 		return
 	}
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL, syscall.SIGHUP, syscall.SIGQUIT)
-	go func() {
-		s := <-ch
-		log.Printf("receive signal '%v'", s)
-		grpclb.UnRegister()
-		os.Exit(1)
-	}()
 
 	// Init gRPC trans service
 	// All future RPC activity involving `s` will be automatically traced.

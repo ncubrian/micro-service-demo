@@ -11,12 +11,12 @@ import (
 	"github.com/CardInfoLink/log"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 
-	pb "github.com/jackyvictory/micro-service-demo/service/pb"
+	pb "github.com/ncubrian/micro-service-demo/service/pb"
 	opentracing "github.com/opentracing/opentracing-go"
 	grpc "google.golang.org/grpc"
 	// "sourcegraph.com/sourcegraph/appdash"
 	// appdashot "sourcegraph.com/sourcegraph/appdash/opentracing"
-	grpclb "github.com/jackyvictory/micro-service-demo/facility/grpclb"
+	grpclb "github.com/ncubrian/micro-service-demo/facility/grpclb"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
 )
 
@@ -24,8 +24,8 @@ var (
 	port          = flag.Int("port", 9000, "cil platform listening port")
 	platServ      = flag.String("cil platform", "cilPlatform", "cil platform name")
 	transServ     = flag.String("trans service", "trans", "transaction service name")
-	etcdReg       = flag.String("reg", "http://192.168.99.40:2379,http://192.168.99.50:2379,http://192.168.99.60:2379", "register etcd address")
-	endpoint      = flag.String("zipkin endpoint", "http://10.30.1.20:9411/api/v1/spans", "Endpoint to send Zipkin spans to")
+	zkReg         = flag.String("reg", "192.168.1.213:2181,192.168.1.224:2181,192.168.1.226:2181", "register etcd address")
+	endpoint      = flag.String("zipkin endpoint", "http://192.168.99.203:9411/api/v1/spans", "Endpoint to send Zipkin spans to")
 	debug         = flag.Bool("debug mode", false, "zipkin debug mode")
 	sameSpan      = flag.Bool("same span", true, "same span can be set to true for RPC style spans (Zipkin V1) vs Node style (OpenTracing)")
 	traceID128Bit = flag.Bool("trace id 128 bit", true, "make Tracer generate 128 bit traceID's for root spans.")
@@ -70,12 +70,12 @@ func main() {
 	// Init grpc load balancer
 	r := grpclb.NewResolver(*transServ)
 	b := grpc.RoundRobin(r)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Init gRPC trans service
 	// All future RPC activity involving `conn` will be automatically traced.
-	conn, err := grpc.DialContext(ctx, *etcdReg, grpc.WithInsecure(), grpc.WithBalancer(b), grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)))
+	conn, err := grpc.DialContext(ctx, *zkReg, grpc.WithInsecure(), grpc.WithBalancer(b), grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)))
 	if err != nil {
 		log.Errorf("failed to connect transaction service, error is %v\n", err)
 		return

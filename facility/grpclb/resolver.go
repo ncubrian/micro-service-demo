@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
-	etcd3 "github.com/coreos/etcd/clientv3"
+	"github.com/samuel/go-zookeeper/zk"
 	"google.golang.org/grpc/naming"
 )
 
@@ -26,14 +27,30 @@ func (re *resolver) Resolve(target string) (naming.Watcher, error) {
 		return nil, errors.New("grpclb: no service name provided")
 	}
 
-	// generate etcd client
-	client, err := etcd3.New(etcd3.Config{
-		Endpoints: strings.Split(target, ","),
-	})
+	// generate zookeeper connection
+	conn, connChan, err := zk.Connect(strings.Split(target, ","), 3 * time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("grpclb: creat etcd3 client failed: %s", err.Error())
+		return nil, fmt.Errorf("grpclb: creat zookeeper connection failed: %s", err.Error())
+	}
+
+	// 等待连接成功
+	for {
+		isConnected := false
+		select {
+		case connEvent := <-connChan:
+			if connEvent.State == zk.StateConnected {
+				isConnected = true
+				fmt.Println("connect to zookeeper server success!")
+			}
+		case _ = <-time.After(time.Second * 3): // 3秒仍未连接成功则返回连接超时
+			return nil, fmt.Errorf("connect to zookeeper server timeout!")
+		}
+
+		if isConnected {
+			break
+		}
 	}
 
 	// Return watcher
-	return &watcher{re: re, client: *client}, nil
+	return &watcher{re: re, conn: conn}, nil
 }

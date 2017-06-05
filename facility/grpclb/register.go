@@ -6,76 +6,90 @@ import (
 	"time"
 
 	"github.com/CardInfoLink/log"
-	etcd3 "github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
-	"golang.org/x/net/context"
+	"github.com/samuel/go-zookeeper/zk"
 )
 
 // Prefix should start and end with no slash
 var Prefix = "etcd3_naming"
-var client *etcd3.Client
+var zkConn zk.Conn
 var serviceKey string
 
-var stopSignal = make(chan bool, 1)
-
-// Register regist configuration into etcd
-func Register(name string, host string, port int, target string, interval time.Duration, ttl int) error {
+// Register regist configuration into zookeeper
+func Register(name string, host string, port int, target string, interval time.Duration) error {
 	serviceValue := fmt.Sprintf("%s:%d", host, port)
 	serviceKey = fmt.Sprintf("/%s/%s/%s", Prefix, name, serviceValue)
-
-	// get endpoints for register dial address
-	var err error
-	client, err = etcd3.New(etcd3.Config{
-		Endpoints: strings.Split(target, ","),
-	})
+	
+	// generate zookeeper connection
+	conn, connChan, err := zk.Connect(strings.Split(target, ","), interval)
 	if err != nil {
-		return fmt.Errorf("grpclb: create etcd3 client failed: %v", err)
+		return fmt.Errorf("grpclb: creat zookeeper connection failed: %s", err.Error())
 	}
 
-	go func() {
-		// invoke self-register with ticker
-		ticker := time.NewTicker(interval)
-		for {
-			// minimum lease TTL is ttl-second
-			resp, _ := client.Grant(context.TODO(), int64(ttl))
-			// should get first, if not exist, set it
-			_, err := client.Get(context.Background(), serviceKey)
-			if err != nil {
-				if err == rpctypes.ErrKeyNotFound {
-					if _, err = client.Put(context.TODO(), serviceKey, serviceValue, etcd3.WithLease(resp.ID)); err != nil {
-						log.Printf("grpclb: set service '%s' with ttl to etcd3 failed: %s", name, err.Error())
-					}
-				} else {
-					log.Printf("grpclb: service '%s' connect to etcd3 failed: %s", name, err.Error())
-				}
-				// log.Debugf("etcd serviceKey is %v, client is %v", serviceKey, client)
-			} else {
-				// refresh set to true for not notifying the watcher
-				if _, err = client.Put(context.Background(), serviceKey, serviceValue, etcd3.WithLease(resp.ID)); err != nil {
-					log.Printf("grpclb: refresh service '%s' with ttl to etcd3 failed: %s", name, err.Error())
-				}
-				// log.Debugf("etcd serviceKey is %v, client is %#+v", serviceKey, client)
+	// 等待连接成功
+	for {
+		isConnected := false
+		select {
+		case connEvent := <-connChan:
+			if connEvent.State == zk.StateConnected {
+				isConnected = true
+				log.Info("connect to zookeeper server success!")
 			}
-
-			select {
-			case <-stopSignal:
-				return
-			case <-ticker.C:
-			}
+		case _ = <-time.After(time.Second * 3): // 3秒仍未连接成功则返回连接超时
+			return fmt.Errorf("connect to zookeeper server timeout!")
 		}
-	}()
+
+		if isConnected {
+			break
+		}
+	}
+
+	rootDir := fmt.Sprintf("/%s", Prefix)
+	// 判断zookeeper中是否存在root目录，不存在则创建该目录
+	exist, _, err := conn.Exists(rootDir)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		path, err := conn.Create(rootDir, nil, 0, zk.WorldACL(zk.PermAll))
+		if err != nil {
+			return err
+		}
+		if rootDir != path {
+			return fmt.Errorf("Create returned different path, " + rootDir + " != " + path)
+		}
+	}
+
+	serviceDir := fmt.Sprintf("%s/%s", rootDir, name)
+	exist, _, err = conn.Exists(serviceDir)
+	if err != nil {
+		return err
+	}
+	if !exist {
+		path, err := conn.Create(serviceDir, nil, 0, zk.WorldACL(zk.PermAll))
+		if err != nil {
+			return err
+		}
+		if serviceDir != path {
+			return fmt.Errorf("Create returned different path, " + serviceDir + " != " + path)
+		}
+	}
+
+	exist, _, err = conn.Exists(serviceKey)
+	if err != nil {
+		return err
+	}
+
+	if !exist {
+		path, err := conn.Create(serviceKey, ([]byte)(serviceValue), zk.FlagEphemeral, zk.WorldACL(zk.PermAll))
+		if err != nil {
+			return err
+		}
+		if serviceKey != path {
+			return fmt.Errorf("Create returned different path, " + serviceKey + " != " + path)
+		}
+	} else {
+		return fmt.Errorf("service node %s already exist", serviceKey)
+	}
 
 	return nil
-}
-
-// UnRegister delete registered service from etcd
-func UnRegister() (err error) {
-	stopSignal <- true
-	stopSignal = make(chan bool, 1)                                           // just a hack to avoid multi UnRegister deadlock
-	if _, err = client.Delete(context.Background(), serviceKey); err != nil { // should set timeout, in case etcd unavaliable
-		log.Printf("grpclb: deregister '%s' failed: %s", serviceKey, err.Error())
-	} else {
-		log.Printf("grpclb: deregister '%s' ok.", serviceKey)
-	}
-	return err
 }
