@@ -16,14 +16,14 @@ import (
 	"github.com/CardInfoLink/log"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 
-	pb "github.com/jackyvictory/micro-service-demo/service/pb"
+	pb "github.com/ncubrian/micro-service-demo/service/pb"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	// appdashot "sourcegraph.com/sourcegraph/appdash/opentracing"
-	grpclb "github.com/jackyvictory/micro-service-demo/facility/grpclb"
+	grpclb "github.com/ncubrian/micro-service-demo/facility/grpclb"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
 )
 
@@ -36,6 +36,8 @@ var (
 	sameSpan      = flag.Bool("same span", true, "same span can be set to true for RPC style spans (Zipkin V1) vs Node style (OpenTracing)")
 	traceID128Bit = flag.Bool("trace id 128 bit", true, "make Tracer generate 128 bit traceID's for root spans.")
 )
+
+const SRV_TTL = 10
 
 type transServer struct{}
 
@@ -81,7 +83,7 @@ func main() {
 	}
 
 	// Regist grpc load balancer
-	err = grpclb.Register(*transServ, localIP(), *port, *etcdReg, time.Second*10, 15)
+	err = grpclb.Register(*transServ, localIP(), *port, *etcdReg, SRV_TTL)
 	if err != nil {
 		log.Errorf("failed to register grpclb, error is %v", err)
 		return
