@@ -11,12 +11,12 @@ import (
 	"github.com/CardInfoLink/log"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 
-	pb "github.com/jackyvictory/micro-service-demo/service/pb"
+	pb "github.com/ncubrian/micro-service-demo/service/pb"
 	opentracing "github.com/opentracing/opentracing-go"
 	grpc "google.golang.org/grpc"
 	// "sourcegraph.com/sourcegraph/appdash"
 	// appdashot "sourcegraph.com/sourcegraph/appdash/opentracing"
-	grpclb "github.com/jackyvictory/micro-service-demo/facility/grpclb"
+	grpclb "github.com/ncubrian/micro-service-demo/facility/grpclb"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"
 )
 
