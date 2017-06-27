@@ -24,7 +24,7 @@ var (
 	port          = flag.Int("port", 9000, "cil platform listening port")
 	platServ      = flag.String("cil platform", "cilPlatform", "cil platform name")
 	transServ     = flag.String("trans service", "trans", "transaction service name")
-	zkReg         = flag.String("reg", "192.168.1.213:2181,192.168.1.224:2181,192.168.1.226:2181", "register etcd address")
+	zkReg         = flag.String("reg", "192.168.1.213:2181,192.168.1.224:2181,192.168.1.226:2181", "register zookeeper address")
 	endpoint      = flag.String("zipkin endpoint", "http://192.168.99.203:9411/api/v1/spans", "Endpoint to send Zipkin spans to")
 	debug         = flag.Bool("debug mode", false, "zipkin debug mode")
 	sameSpan      = flag.Bool("same span", true, "same span can be set to true for RPC style spans (Zipkin V1) vs Node style (OpenTracing)")

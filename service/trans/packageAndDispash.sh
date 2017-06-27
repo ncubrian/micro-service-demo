@@ -1,5 +1,5 @@
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o transService main.go
-scp transService zk@192.168.1.213:~/service/
-scp transService zk@192.168.1.224:~/service/
-scp transService zk@192.168.1.226:~/service/
-rm ./transService
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -o transService-zk main.go
+scp transService-zk root@192.168.99.11:/opt/service/
+scp transService-zk root@192.168.99.22:/opt/service/
+scp transService-zk root@192.168.99.33:/opt/service/
+rm ./transService-zk
