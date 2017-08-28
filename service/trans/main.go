@@ -5,46 +5,36 @@ import (
 	"strconv"
 	"fmt"
 	"net"
+	"math/rand"
 	"runtime"
 	"strings"
+	"time"
 	"golang.org/x/net/context"
 
 	"github.com/CardInfoLink/log"
-	"rogers.chen/governor-helper/helper"
+	"rogers.chen/governor-helper-go/helper"
+	"github.com/opentracing/opentracing-go/ext"
+	opentracing "github.com/opentracing/opentracing-go"
 
-	pb "github.com/ncubrian/micro-service-demo/service/pb"
-	grpc "google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
+	"github.com/ncubrian/micro-service-demo/service/pb"
 )
 
 type transServer struct{}
+var randomSeed = rand.NewSource(time.Now().UnixNano())
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	port, err := strconv.Atoi(os.Args[1])
-	err = helper.Register("localhost", 23333, "servplat", "query", port)
+	s, err := helper.Register("localhost", 23333, "servplat", "query", port)
 	if err != nil {
 		log.Errorf("failed to register, error is %v", err)
 		return
 	}
 
-	// Listen gRPC trans service port
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		log.Errorf("failed to listen, error is %v", err)
-		return
-	}
+	pb.RegisterTransactionServer(s.GetServer(), &transServer{})
 
-
-	// Init gRPC trans service
-	s := grpc.NewServer()
-	pb.RegisterTransactionServer(s, &transServer{})
-	reflection.Register(s)
-	if err = s.Serve(lis); err != nil {
-		log.Errorf("failed to serve, error is %v", err)
-		return
-	}
+	s.Start()
 }
 
 func (s *transServer) Add(ctx context.Context, in *pb.Trans) (*pb.Resp, error) {
@@ -64,6 +54,33 @@ func (s *transServer) Find(ctx context.Context, in *pb.QueryCond) (*pb.TransList
 }
 
 func dbMockFind(ctx context.Context) (*pb.TransList, error) {
+	// create new span using span found in context as parent (if none is found, our span becomes the trace root).
+	resourceSpan, _ := opentracing.StartSpanFromContext(
+		ctx,
+		fmt.Sprintf("DB %s.dbMockFind", "trans"),
+		// opentracing.StartTime(time.Now()),
+	)
+	defer func() {
+		resourceSpan.Finish()
+		// log.Debugf("%#+v", resourceSpan)
+	}()
+	// mark span as resource type
+	ext.SpanKind.Set(resourceSpan, "resource")
+	// name of the resource we try to reach
+	ext.PeerService.Set(resourceSpan, "MongoDB")
+	// hostname of the resource
+	ext.PeerHostname.Set(resourceSpan, "transmgo1.showmoney.cn")
+	// port of the resource
+	ext.PeerPort.Set(resourceSpan, 27017)
+	// let's binary annotate the query we run
+	resourceSpan.SetTag(
+		"query", "db.trans.find({})",
+	)
+
+	// Let's assume the query is going to take some time. Finding the right
+	// world domination recipes is like searching for a needle in a haystack.
+	time.Sleep(time.Duration(rand.New(randomSeed).Intn(100)) * time.Millisecond)
+
 	return &pb.TransList{
 		T: []*pb.Trans{
 			&pb.Trans{Id: "id1", OrderNum: "order1", TransAmt: 1},

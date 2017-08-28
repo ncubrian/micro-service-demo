@@ -9,7 +9,7 @@ import (
 	_ "time"
 
 	"github.com/CardInfoLink/log"
-	"rogers.chen/governor-helper/helper"
+	"rogers.chen/governor-helper-go/helper"
 	pb "github.com/ncubrian/micro-service-demo/service/pb"
 )
 
@@ -23,7 +23,7 @@ func main() {
 	flag.Parse()
 
 	// Init grpc load balancer
-	conn, cancel, pctx, err := helper.Discover("localhost", 23333, "servplat", "query")
+	conn, cancel, pctx, err := helper.Discover("localhost", 23333, "servplat", "query", "consumer", 32222)
 	if err != nil {
 		log.Error(err)
 		return
